@@ -68,12 +68,16 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           pattern: .mt?
+      - name: Enables input mode
+        run: echo '#define __input__' > config/define.h
       - name: Compile
         uses: fx31337/mql-compile-action@master
         with:
           include: .
           mt-path: .mt${{ matrix.version }}
-          path: "**/Stg_*.mq${{ matrix.version }}"
+          path: |
+            "**/Stg_*.mq${{ matrix.version }}"
+            indicators-other/**/*.mq${{ matrix.version }}
           verbose: true
       - name: List compiled files
         run: '(Get-ChildItem -Recurse -Path . -Include *.ex[45]).fullname'
