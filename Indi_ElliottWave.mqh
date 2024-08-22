@@ -21,7 +21,7 @@
 
 // Defines
 #ifndef INDI_EWO_OSC_PATH
-#define INDI_EWO_OSC_PATH "indicators-other\\Oscillator"
+#define INDI_EWO_OSC_PATH "indicators-other\\Oscillators\\Multi"
 #endif
 
 // Structs.
