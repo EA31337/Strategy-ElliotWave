@@ -1,6 +1,10 @@
 ---
 name: Compile
 
+# Setting an environment variable with the value of a configuration variable.
+env:
+  INDI_OTHER_WORKDIR: ${{ vars.INDI_OTHER_WORKDIR || 'indicators-other' }}
+
 # yamllint disable-line rule:truthy
 on:
   pull_request:
@@ -17,6 +21,7 @@ on:
     paths-ignore:
       - '*.md'
       - '.git*'
+  workflow_call:
 
 jobs:
   checkout-classes:
@@ -25,13 +30,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: v3.000.1
+          ref: v3.000.2
           repository: EA31337/EA31337-classes
       - name: Uploads source code
         uses: actions/upload-artifact@v4
         with:
           name: src-classes
           path: .
+
+  compile-indicators-other:
+    name: Compile Indicators (Other)
+    uses: EA31337/EA31337-Indicators-Other/.github/workflows/compile.yml@master
+    with:
+      artifact_prefix: io-mt
+      checkout_branch: v1.000
 
   mt4:
     name: Installs platform (4)
@@ -41,6 +53,7 @@ jobs:
       artifact_overwrite: true
       skip_cleanup: true
       version: 4
+
   mt5:
     name: Installs platform (5)
     uses: EA31337/EA-Tester/.github/workflows/platform-linux.yml@dev
@@ -55,7 +68,7 @@ jobs:
       run:
         shell: powershell
     name: Compile
-    needs: [checkout-classes, mt4, mt5]
+    needs: [checkout-classes, compile-indicators-other, mt4, mt5]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -70,14 +83,11 @@ jobs:
           pattern: .mt?
       - name: Enables input mode
         run: echo '#define __input__' > config/define.h
-      - name: Compile indicators
-        uses: fx31337/mql-compile-action@master
+      - uses: actions/download-artifact@v4
         with:
-          include: .
-          mt-path: .mt${{ matrix.version }}
-          path: indicators-other/**/*.mq${{ matrix.version }}
-          verbose: true
-      - name: Compile strategy
+          merge-multiple: true
+          pattern: "*-indicators-ex${{ matrix.version }}"
+      - name: Compile
         uses: fx31337/mql-compile-action@master
         with:
           include: .
@@ -88,11 +98,11 @@ jobs:
         run: '(Get-ChildItem -Recurse -Path . -Include *.ex[45]).fullname'
       - run: Get-Location
       - name: Upload artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
-          name: Strategy
-          path: '**/Stg_*.ex[45]'
+          name: Strategy-ex${{ matrix.version }}
+          path: '**/Stg_*.ex${{ matrix.version }}'
     strategy:
       matrix:
         version:
