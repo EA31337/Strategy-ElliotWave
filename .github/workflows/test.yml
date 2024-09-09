@@ -1,142 +1,58 @@
 ---
-name: Backtest
+name: Test
 
 # yamllint disable-line rule:truthy
 on:
   pull_request:
     branches:
       - 'master'
-      - 'dev*'
+      - '*dev*'
     paths-ignore:
       - '*.md'
-      - '.git*'
   push:
     branches:
       - 'master'
-      - 'dev*'
+      - '*dev*'
     paths-ignore:
       - '*.md'
-      - '.git*'
 
 jobs:
-  Compile-EA:
-    defaults:
-      run:
-        shell: powershell
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          submodules: 'recursive'
-      - uses: actions/checkout@v2
-        with:
-          path: Include/EA31337-classes
-          ref: v3.000.2
-          repository: EA31337/EA31337-classes
-      - name: Enables input mode
-        run: echo '#define __input__' > config/define.h
-      - name: Enables resource mode
-        run: echo '#define __resource__' >> config/define.h
-      - name: Compile strategy for MQL4
-        uses: fx31337/mql-compile-action@master
-        with:
-          include: .
-          init-platform: true
-          mt-version: 5.0.0.2361
-          path: Stg_ElliottWave.mq4
-          verbose: true
-      - uses: actions/checkout@v2
-        with:
-          path: indicators-other/Oscillator/Include/EA31337-classes
-          ref: v3.000.2
-          repository: EA31337/EA31337-classes
-      - name: Compile strategy for MQL5
-        uses: fx31337/mql-compile-action@master
-        with:
-          include: .
-          mt-version: 5.0.0.2515
-          path: Stg_ElliottWave.mq5
-          verbose: true
-      - name: List compiled files
-        run: '(Get-ChildItem -Recurse -Path . -Include *.ex[45]).fullname'
-      - run: Get-Location
-      - name: Upload strategy artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: EA
-          path: '*.ex[45]'
-  Compile-Indicators:
-    defaults:
-      run:
-        shell: powershell
-        working-directory: indicators-other
-    runs-on: windows-latest
-    strategy:
-      matrix:
-        file:
-          - indicators-other/Oscillator/Elliott_Wave_Oscillator2
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          submodules: 'recursive'
-      - uses: actions/checkout@v2
-        with:
-          path: Include/EA31337-classes
-          ref: v3.000.2
-          repository: EA31337/EA31337-classes
-      - name: Compile required indicator for MQL4
-        uses: fx31337/mql-compile-action@master
-        with:
-          include: .
-          init-platform: true
-          mt-version: 5.0.0.2361
-          path: ${{ matrix.file }}.mq4
-          verbose: true
-      - name: Compile required indicator for MQL5
-        uses: fx31337/mql-compile-action@master
-        with:
-          include: .
-          init-platform: true
-          mt-version: 5.0.0.2515
-          path: ${{ matrix.file }}.mq5
-          verbose: true
-      - name: List compiled files
-        run: '(Get-ChildItem -Recurse -Path . -Include *.ex[45]).fullname'
-      - run: Get-Location
-      - name: Upload indicator artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: Indicators
-          path: '**/*.ex[45]'
-  Test:
-    needs: [Compile-EA, Compile-Indicators]
+
+  compile:
+    name: Compile
+    uses: ./.github/workflows/compile.yml
+
+  test:
+    name: Test
+    needs: compile
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        month: [1]
-        year: [2019, 2020]
+        file:
+          - Stg_ElliottWave
+        year: [2022, 2024]
+        version: [5]
     steps:
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v4
         with:
-          path: .
-      - name: Run strategy
-        uses: ea31337/mql-tester-action@master
+          merge-multiple: true
+          pattern: Strategy-ex${{ matrix.version }}
+
+      - name: List compiled files
+        run: find . -name '*.ex?' -type f -print
+
+      - name: Test ${{ matrix.year }}
+        uses: fx31337/mql-tester-action@master
         with:
-          RunOnStart: >-
-            ln -fsv /github/workspace/Indicators
-            "$TERMINAL_DIR/$MQL_DIR/Indicators"
-          BtDeposit: 100000
-          BtDest: ${{ github.workspace }}/_results
-          BtMonths: ${{ matrix.month }}
-          BtYears: ${{ matrix.year }}
-          OptFormatBrief: true
-          OptFormatJson: true
-          OptVerbose: true
-          TestExpert: Stg_ElliottWave
+          Login: ${{ secrets.MT5_LOGIN }}
+          Password: ${{ secrets.MT5_PASSWORD }}
+          Server: MetaQuotes-Demo
+          TestDeposit: 2000
+          TestExpert: ${{ matrix.file }}.ex5
+          TestFromDate: ${{ matrix.year }}.01.01
           TestPeriod: M1
-          TestReportName: Report-${{ matrix.year }}-${{ matrix.month }}
-      - name: Upload results
-        uses: actions/upload-artifact@v2
-        with:
-          name: results
-          path: ${{ github.workspace }}/_results/*.*
+          TestSymbol: EURUSD
+          TestToDate: ${{ matrix.year }}.01.14
+          # yamllint disable-line rule:line-length
+          UrlExpert: file://${{ github.workspace }}/${{ matrix.file }}.ex5
+          Version: 5
